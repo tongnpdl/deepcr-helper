@@ -1,18 +1,17 @@
 import numpy as np
 
 
-class interp_shower2d:
-	references = []
-	def __init__(self,library=None):
+class shower_interp:
+	
+	def __init__(self,table=None):
 		"""
 		Initialize a callable interpolator object.
 		The object lookup library of simulated cosmic ray showers for appropriate entries to be used for interpolation.
 		"""
-		if library is None: ## use example library
-			pass ## for now
+		self.content_table = table ## for now
 
 
-	def __call__(self,x,y,method='nearest_neighbor'):
+	def __call__(self,x,y,z,Energy,theta,phi,method='nearest_neighbor',**kwarg):
 		"""
 		Call function return interpolated electric fields
 		"""
