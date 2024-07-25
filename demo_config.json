@@ -1,0 +1,10 @@
+{
+    "pulse_method":"nearest_neighbor",
+    "num_pulse_neighbor": 1,
+    
+    "event_method":"nearest_neighbor",
+    "num_event_neighbor": 1,
+    
+    "average_method":"energy_scaling",
+    "height_tol": 5.0
+}
