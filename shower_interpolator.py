@@ -14,15 +14,15 @@ import time
 import csv
 import pandas as pd
 import os
-class summarized_content(dict):
-	params = {}
-	path = ""
-	def __init__(self,file_path):
-		self.path = file_path
-	# def __repr__(self):
-	# 	return 'summarized content'
-	# def __str__(self):
-	# 	return self.params
+# class summarized_content(dict):
+# 	params = {}
+# 	path = ""
+# 	def __init__(self,file_path):
+# 		self.path = file_path
+# 	def __repr__(self):
+# 		return 'summarized content'
+# 	def __str__(self):
+# 		return self.params
 
 class shower_interp3D:
 	content_list = []
@@ -188,7 +188,12 @@ class shower_interp3D:
 			loadstart = time.perf_counter()
 			for ch in load_ch:
 				if channels[ch]['data'] == None:
-					filepath = os.path.join(simdir,f'Coreas/raw_ch{ch}.dat')
+					if self.config['type'] == "Coreas":
+						filepath = os.path.join(simdir,f'Coreas/raw_ch{ch}.dat')
+					elif self.config['type'] == "Geant":
+						filepath = os.path.join(simdir,f'Geant/Antenna{ch}.dat')
+					else:
+						raise Exception("please specify \'type\' in config as \'Coreas\' or \'Geant\'")
 					# start = time.perf_counter()
 					with open(filepath,'r') as infile:
 						temp_data = pd.read_csv(infile, header=None,delimiter='\t')

@@ -84,6 +84,10 @@ def generate_cosika_steering():
 def generate_atmosphere():
     pass
 
+def generate_hdf5(simdir):
+    pass
+
+
 if __name__ == "__main__":
     single_21 = generate_single_rnog('RNO_season_2021.json',21)
     generate_antenna_list(single_21)

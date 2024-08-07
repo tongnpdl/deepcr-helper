@@ -26,8 +26,9 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 config_filename = os.path.join(dir_path,"demo_config.json")
 with open( config_filename , "r") as infile:
     demo_config = json.load(infile)
-print("config:")
-for k in demo_config.keys(): print("\t",k,":",demo_config[k])
+def print_config(config):
+    print("config:")
+    for k in config.keys(): print(f"\t{k}:",config[k])
 
 # user-defined content list
 content_list = []
@@ -55,9 +56,6 @@ for e in energies:
             
             content_list.append(content) 
 
-print(content_list)
-
-
 # perform single request (Energy,Theta,Phi) with mutiple positions (channels)
 # ---------------------------------------------------------------------------
 
@@ -83,6 +81,7 @@ sim_surface_height = 3216.0 # meter
 antenna_positions = np.array(antenna_positions) + np.array([0.,0.,sim_surface_height])
 
 # initialize shower interpolator class
+print("\nInitializing interpolator...\n")
 ini_start = time.perf_counter()
 shower_interp = shower_interp3D(content_list,config=config_filename)
 ini_end = time.perf_counter()
@@ -91,6 +90,28 @@ Energy = 0.0316
 Theta = 6. 
 Phi = 0.
 
-print(f"Initialization done. Time used:{(ini_end - ini_start)/1e-3:.3e} ms")
+print(f"Initialization done. \n\tTime used:{(ini_end - ini_start):.3e} s")
+
+
 # call interpolation at given Energy,Theta,Phi,and antenna positions
-shower_interp(Energy,Theta,Phi, antenna_positions)
+print("\nInterpolating...\n")
+call_start = time.perf_counter()
+interp_efields = shower_interp(Energy,Theta,Phi, antenna_positions)
+call_end = time.perf_counter()
+
+print(  f"Interpolated {len(antenna_positions)} channels.")
+print_config(demo_config)
+print(  f"\tTime used:{(call_end - call_start):.3e} s")
+
+# turning nuradiomc efields into numpy array
+print("Resulting (interpolated) efields", len(interp_efields))
+np_efields = []
+for field in interp_efields:
+    times = field.get_times()
+    efields = field.get_trace()
+    block = np.vstack( (times,efields))
+    np_efields.append(block)
+
+np_efields = np.array(np_efields)
+print("expect shape : num_channel x 4 x num_sample where 4 = len([t,Ex,Ey,Ez])")
+print("numpy efields' shape :",np_efields.shape)
