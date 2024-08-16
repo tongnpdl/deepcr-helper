@@ -23,6 +23,10 @@ import os
 # 		return 'summarized content'
 # 	def __str__(self):
 # 		return self.params
+class layer_interp:
+	def __init__(self,efields):
+		self.positions = np.array([ ef.get_position() for ef in efields])
+		self.amplitudes = np.array([ ef.get_trace() for ef in efields])
 
 class shower_interp3D:
 	content_list = []
@@ -52,6 +56,7 @@ class shower_interp3D:
 						this_channel['id'] = id
 						this_channel['position'] = np.array(position,dtype=float)
 						this_channel['data'] = None
+						this_channel['loaded'] = False
 						channels.append(this_channel)
 				content['channels'] = channels
 				perfend = time.perf_counter()
@@ -80,30 +85,40 @@ class shower_interp3D:
 				raise Exception('Unknown "file_type": available options: channels, events ')
 
 
-	class pulse_interp3D:
-		def __init__(self, positions, amplitudes,times):
-			self.positions = positions
-			self.amplitudes = amplitudes
-			self.times = times
-		def __call__(self,targets,method):
-			interp_efields = []
-			if method == "nearest_neighbor":
-				for target in targets:
-					distances = np.linalg.norm(self.positions - target)
-					argmin_distance = np.argmin(distances)
-					amp = self.amplitudes[argmin_distance]
-					t = self.times[argmin_distance]
-					sampling_rate = 1./(t[1]-t[0])
-					efield = ElectricField(0)
-					efield.set_position(self.positions[argmin_distance])
-					efield.set_trace(np.array(amp),sampling_rate)
-					efield.set_trace_start_time(t[0])
+	def pulse_interp3D(self,targets,content,method='nearest_neighbor'):
+		positions = np.array(content['positions'])
+		interp_efields = []
+		if method == "nearest_neighbor":
+			for target in targets:
+				distances = np.linalg.norm(positions - target,axis=-1)
+				argmin_distance = np.argmin(distances)
+				# print("dist id",argmin_distance,content['channels'][argmin_distance]['id'])
+				data = content['channels'][argmin_distance]['data'] ## Assuming it isn't None
+				t = data[0]
+				amp = data[1:]
 
-					interp_efields.append(efield)
-			return interp_efields
+				sampling_rate = 1./(t[1]-t[0])
+				efield = ElectricField(0)
+				efield.set_position(positions[argmin_distance])
+				efield.set_trace(np.array(amp),sampling_rate)
+				efield.set_trace_start_time(t[0])
+
+				interp_efields.append(efield)
+		elif method == "simple":
+			layer_ids = self.identify_layer(targets,content,tol=5)
+			#content_layers = content['layers']
+			for target,lid in enumerate(zip(targets,layer_ids)):
+				#interpolator = content_layers[lid]['interpolator'] ## Assuming it isn't none
+				#_efield = interpolator(target)
+				_efield = ElectricField(0)
+				_efield.set_position(target)
+				interp_efields.append(_efield)
+		return interp_efields
 
 	def get_content_list(self):
 		return self.content_list
+	def set_content_list(self,new_content_list):
+		self.content_list = new_content_list
 	def add_content(self,new_content):
 		self.content_list.append(new_content)
 
@@ -174,9 +189,9 @@ class shower_interp3D:
 		ids = np.unique(ids)
 		return ids
 	def load_content(self,content,load_ch):
-		pos = [] # n_ch x 3
-		t = [] # n_ch x n_sample
-		amplitudes = [] # n_ch x 3 x n_sample 
+		# pos = [] # n_ch x 3
+		# t = [] # n_ch x n_sample
+		# amplitudes = [] # n_ch x 3 x n_sample 
 		content_e = float(content['energy'])
 		content_a = content['azimuth']
 		content_z = content['zenith']
@@ -186,43 +201,50 @@ class shower_interp3D:
 			channels = content['channels']
 			simdir = content['dir']
 			loadstart = time.perf_counter()
-			for ch in load_ch:
-				if channels[ch]['data'] == None:
+			for channel in channels:
+				chid = channel['id']
+				if chid not in load_ch:
+					continue
+				if not channel['loaded']:
 					if self.config['type'] == "Coreas":
-						filepath = os.path.join(simdir,f'Coreas/raw_ch{ch}.dat')
+						filepath = os.path.join(simdir,f'Coreas/raw_ch{chid}.dat')
 					elif self.config['type'] == "Geant":
-						filepath = os.path.join(simdir,f'Geant/Antenna{ch}.dat')
+						filepath = os.path.join(simdir,f'Geant/Antenna{chid}.dat')
 					else:
 						raise Exception("please specify \'type\' in config as \'Coreas\' or \'Geant\'")
 					# start = time.perf_counter()
 					with open(filepath,'r') as infile:
-						temp_data = pd.read_csv(infile, header=None,delimiter='\t')
-						_t = np.array(temp_data[0][:],dtype=float)
-						_amp = np.array([temp_data[1][:],temp_data[2][:],temp_data[3][:]])
-						_pos = channels[ch]['position']
-						t.append( _t)
-						amplitudes.append( _amp )
-						pos.append(_pos)
+						df = pd.read_csv(infile, header=None,delimiter='\t')
+						cols = np.array( [np.array(df[ic],dtype=float) for ic in range(4)] )
+						channel['data'] = cols
+						channel['loaded'] = True
+						# _t = cols[0]
+						# _amp = cols[1:]
+						# _pos = channel['position']
+						# t.append( _t)
+						# amplitudes.append( _amp )
+						# pos.append(_pos)
 
 					# end = time.perf_counter()
 					# num_line.append(len(temp_data[0][:]))
 					# time_took.append(end-start)
-					channels[ch]['data'] = (t,amplitudes)
 				else: ## data already loaded 
-					_t,_amp = channels[ch]['data']
-					_pos = channels[ch]['position']
-					t.append(_t)
-					amplitudes.append(_amp)
-					pos.append(_pos)
+					pass
+					# _t,_amp = channel['data']
+					# _pos = channel['position']
+					# t.append(_t)
+					# amplitudes.append(_amp)
+					# pos.append(_pos)
 			loadend = time.perf_counter()
 			print(f'Loaded {len(load_ch)} channels from E: {content_e} zenith: {content_z} azimuth: {content_a}\n\t took {(loadend-loadstart)/1e-3:.3e} ms')
 		else:
 			raise Exception('Unknow load method / file_type ... available: channels ')
 		# plt.scatter(num_line,time_took), plt.xlabel('num line'),plt.ylabel('time took')
-		return pos,amplitudes,t
+		#return content
 	def energy_scale(self,energy,target_energy):
 		## Atarget = Ao*scale ... scale = Etarget/Eo
-		scale = 10**(target_energy - np.array(energy))
+		# scale = 10**(target_energy - np.array(energy))
+		scale = np.ones_like(energy) 
 		return scale
 
 
@@ -250,17 +272,19 @@ class shower_interp3D:
 		"""
 		# look up the list of CR simulations (Energy,Theta,Phi)
 		relevant_contents = self.lookup_content(Energy,Theta,Phi,method=self.config['event_method'])
+
 		# determine "electric field" (Ex[t],Ey[t],Ez[t]) for each content from the list of relevant contents
 		efields = [] ## expect n_content x n_pos 
 		for content in relevant_contents:
 			## determine which channels are needed
 			load_ch = self.get_relevant_ch(positions,content,method=self.config['pulse_method']) ## should be the same as interpolation method
 			## load simulated signals 
-			_antenna_position, _amplitudes, _t = self.load_content(content,load_ch)
+			# _antenna_position, _amplitudes, _t = self.load_content(content,load_ch)
+			self.load_content(content,load_ch)
 			## initialize single-event interpolator
-			this_interp = self.pulse_interp3D(_antenna_position,_amplitudes,_t)
+			# this_interp = self.pulse_interp3D(_antenna_position,_amplitudes,_t,content)
 			## call single-event interpolator
-			interp_efields = this_interp(positions,method=self.config['pulse_method'])
+			interp_efields = self.pulse_interp3D(positions,content,method=self.config['pulse_method'])
 
 			##
 			efields.append(interp_efields)
