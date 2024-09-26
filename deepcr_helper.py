@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy.signal import hilbert
 from NuRadioReco.utilities import units
 import NuRadioMC
 import NuRadioReco
@@ -87,6 +87,50 @@ def generate_atmosphere():
 def generate_hdf5(simdir):
     pass
 
+def get_pulsetime(efield,passband=None):
+    if passband is None:
+        E = efield.get_trace()
+    else:
+        E = efield.get_filtered_trace(passband)
+    H = hilbert(E,axis=-1)
+    time = efield.get_times()
+    #pulse_time = time[np.argmax( np.sum(np.abs(H)**2,axis=0) )]  
+    pulse_time = time[np.argmax( np.abs(H)**2,axis=-1)] 
+    return pulse_time
+
+def get_fluence(efield,passband=None): ## Integrated power per unit area
+    if passband is None:
+        E = efield.get_trace()
+        #pulse_times = get_pulsetime(efield)
+    else:
+        E = efield.get_filtered_trace(passband)
+        #pulse_times = get_pulsetime(efield,passband)
+    H = hilbert(E,axis=-1)
+    time = efield.get_times()
+    freq = efield.get_frequencies()
+    #df = freq[1]-freq[0]
+    dt = time[1]-time[0]
+    
+    #masks = np.array([[ True if ( (t<pulse_times[i]+5*units.ns) and (t>=pulse_times[i]-5*units.ns) ) else False for t in time] for i in range(3)])
+    #pw = np.array([ dt* np.sum(np.abs(H[i][masks[i]])**2)for i in range(3)])
+    pw = np.array([ dt* np.sum(np.abs(H[i])**2)for i in range(3)])  * (1/376.73 * units.farad / units.s) ## add ice dielectric constant
+    return pw
+
+def get_phase_constant(efield,passband=None):
+    if passband is None:
+        pulse_t = get_pulsetime(efield)
+    else:
+        pulse_t = get_pulsetime(efield,passband)
+    wf_fft = efield.get_frequency_spectrum()
+    ff = efield.get_frequencies()
+    tt = efield.get_times()
+    t0 = tt[0]
+    shifted_fft = wf_fft * np.array([np.exp(2.j*np.pi*ff*(pt - t0)) for pt in pulse_t])
+    #intitial_phase = (shifted_fft/np.abs(shifted_fft))[0]
+    #sum_fft = np.sum(shifted_fft,axis=-1)
+    #phase_constant = -np.angle(np.sum(shifted_fft,axis=-1))
+    phase_constant = np.exp( 1.j*np.angle(np.sum(shifted_fft,axis=-1)))
+    return phase_constant
 
 if __name__ == "__main__":
     single_21 = generate_single_rnog('RNO_season_2021.json',21)

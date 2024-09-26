@@ -3,6 +3,8 @@ import json
 import deepcr_helper as crhp
 import cr_pulse_interpolator.interpolation_fourier as interpF
 from cr_pulse_interpolator import signal_interpolation_fourier as sigF
+from interpolator2D import interpolator2D
+
 from NuRadioReco.framework.electric_field import ElectricField
 from NuRadioReco.utilities import units
 from numpy import cos,sin,arccos
@@ -94,8 +96,8 @@ class shower_interp3D:
 				argmin_distance = np.argmin(distances)
 				# print("dist id",argmin_distance,content['channels'][argmin_distance]['id'])
 				data = content['channels'][argmin_distance]['data'] ## Assuming it isn't None
-				t = data[0]
-				amp = data[1:]
+				t = data[0] *units.s
+				amp = data[1:] *299.792458*units.V / units.cm
 
 				sampling_rate = 1./(t[1]-t[0])
 				efield = ElectricField(0)
@@ -106,13 +108,34 @@ class shower_interp3D:
 				interp_efields.append(efield)
 		elif method == "simple":
 			layer_ids = self.identify_layer(targets,content,tol=5)
+			unique_layer_ids = np.unique(layer_ids)
+			for uid in unique_layer_ids:
+				this_layer = content['layers'][uid]
+				if this_layer['interpolator'] is None:
+					this_layer_chs = this_layer['channels']
+					this_layer_pos = []
+					this_layer_efields = []
+					self.load_content(content,this_layer_chs)
+					for _ch in this_layer_chs: 
+						_pos = content['channels'][_ch]['position']						
+						_cols = content['channels'][_ch]['data']
+						_times = _cols[0] *units.s
+						_sampling_rate = 1./(_times[1]-_times[0])
+						_efield = ElectricField(_ch)
+						_efield.set_trace(_cols[1:]*299.792458*units.V / units.cm,_sampling_rate)
+						_efield.set_trace_start_time(_times[0])
+						_efield.set_position(_pos)
+						this_layer_efields.append(_efield)
+						this_layer_pos.append(_pos)
+					this_layer['interpolator'] = interpolator2D(this_layer_efields,np.array(this_layer_pos)[:,:2])
+
 			#content_layers = content['layers']
-			for target,lid in enumerate(zip(targets,layer_ids)):
-				#interpolator = content_layers[lid]['interpolator'] ## Assuming it isn't none
-				#_efield = interpolator(target)
-				_efield = ElectricField(0)
-				_efield.set_position(target)
-				interp_efields.append(_efield)
+			for _i,(target,lid) in enumerate(zip(targets,layer_ids)):
+				interpolator = content['layers'][lid]['interpolator'] ## Assuming it isn't none
+				_efield = interpolator([target[:2]])
+				# _efield = ElectricField(0)
+				_efield[0].set_position(target)
+				interp_efields.append(_efield[0])
 		return interp_efields
 
 	def get_content_list(self):
