@@ -20,7 +20,7 @@ from NuRadioReco.utilities import units,fft
 
 class interpolator2D:
     def __init__(self,efields,position2d,
-                 sampling_rate=2*units.GHz,trace_length=2048):
+                 sampling_rate=5*units.GHz,trace_length=4096):
         self._positions = position2d
         self._amplitudes = [] ## amplitudes on common grid
         self._residual_phasor = [] ## phase residual in common grid
