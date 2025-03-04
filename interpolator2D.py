@@ -20,7 +20,7 @@ from NuRadioReco.utilities import units,fft
 
 class interpolator2D:
     def __init__(self,efields,position2d,
-                 sampling_rate=5*units.GHz,trace_length=4096):
+                 sampling_rate=4.99*units.GHz,trace_length=4096):
         self._positions = position2d
         self._amplitudes = [] ## amplitudes on common grid
         self._residual_phasor = [] ## phase residual in common grid
@@ -36,6 +36,7 @@ class interpolator2D:
         for efield in efields:
             t = efield.get_times()
             pulse_time = np.array(get_pulsetime(efield))
+            #pulse_time = np.array([t[0] + 70*units.ns]*3)
             
             trace_sampling_rate = 1./(t[1]-t[0])
             trace_start_time = t[0]
@@ -64,7 +65,7 @@ class interpolator2D:
                 #_amp = np.interp(self._frequencies,ff,np.abs(sp))
 #                print("spline amp",_amp)
 
-                logAspline = CubicSpline(ff,np.log10(np.abs(sp)),bc_type="natural",extrapolate=False ) 
+                logAspline = CubicSpline(ff,np.log10(np.abs(sp)+1e-16),bc_type="natural",extrapolate=False ) 
                 _logamp = logAspline(self._frequencies) #+ np.log10(dff/df)/2
                 amp.append(_amp)
                 logamp.append(_logamp)
@@ -104,7 +105,7 @@ class interpolator2D:
             self._log_amplitude_interp.append(logamp_intp)
 
             
-    def __call__(self,target2d,prepulse=100*units.ns):
+    def __call__(self,target2d,prepulse=50*units.ns):
         return_efields = []
         for target in target2d:
             distance = np.linalg.norm( np.array(self._positions) - np.array(target),axis=-1 )

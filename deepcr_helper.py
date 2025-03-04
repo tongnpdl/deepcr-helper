@@ -116,6 +116,18 @@ def get_fluence(efield,passband=None): ## Integrated power per unit area
     pw = np.array([ dt* np.sum(np.abs(H[i])**2)for i in range(3)])  * (1/376.73 * units.farad / units.s) ## add ice dielectric constant
     return pw
 
+def get_total_fluence(efield,passband=None):
+    if passband is None:
+        E = efield.get_trace()
+    else:
+        E = efield.get_filtered_trace(passband)
+    H = hilbert(E,axis=-1)
+    time = efield.get_times()
+    dt = time[1]-time[0]
+    H2 = np.abs(H)**2 
+    pw = np.sum(H2) * dt * (1/376.73 * units.farad / units.s)
+    return pw
+
 def get_phase_constant(efield,passband=None):
     if passband is None:
         pulse_t = get_pulsetime(efield)
