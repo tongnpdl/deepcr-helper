@@ -69,8 +69,9 @@ def generate_single_rnog(filename,station_id):
     return positions[1:]
 def read_antenna_list(filename):
     with open(filename, 'r') as f:
-        lines = np.genfromtxt(f, delimiter=' ', dtype=None, names=True)
-        positions = np.array([ [line[2],line[3],line[4]] for line in lines])
+        lines = f.readlines()
+        lines = np.array([ line.strip().split() for line in lines])
+        positions = np.array(lines[:,2:5],dtype=float)
     return positions
 
 def generate_antenna_list(antenna_grid):
