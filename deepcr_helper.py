@@ -67,6 +67,11 @@ def generate_single_rnog(filename,station_id):
             _x,_y,_z = det.get_relative_position(st_id,ch_id)
             positions = np.vstack( (positions,[_y,-1*_x, abs_pos[2] + _z ]) )
     return positions[1:]
+def read_antenna_list(filename):
+    with open(filename, 'r') as f:
+        lines = np.genfromtxt(f, delimiter=' ', dtype=None, names=True)
+        positions = np.array([ [line[2],line[3],line[4]] for line in lines])
+    return positions
 
 def generate_antenna_list(antenna_grid):
     ## Format: AntennaPosition = 0 -1000 273500 ch0
