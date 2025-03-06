@@ -79,9 +79,9 @@ def generate_antenna_list(antenna_grid):
     with open('SIM.list', 'w') as f:
         for antenna_id,antenna_pos in enumerate(antenna_grid):
             f.write(f'AntennaPosition = '
-            +f'{antenna_pos[0]/units.cm:>.1f}\t'
-            +f'{antenna_pos[1]/units.cm:>.1f}\t'
-            +f'{antenna_pos[2]/units.cm:.0f}\t'
+            +f'{antenna_pos[0]/units.cm:>.1f} '
+            +f'{antenna_pos[1]/units.cm:>.1f} '
+            +f'{antenna_pos[2]/units.cm:.0f} '
             +f'ch{antenna_id}\n')
 
 def generate_cosika_steering():
