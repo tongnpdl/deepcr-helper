@@ -239,7 +239,7 @@ def read_antenna_data(hdf5_file, antenna_list, antenna_folder, skip_antenna_patt
     for line in antenna_list:
         ll = line.strip().split()
         antenna_position = ll[2:5]
-        antenna_label = ll[5]
+        antenna_label = ll[5].strip("ch")
 
         #skip_antenna_pattern = "\+"
         if skip_antenna_pattern is not None and \
@@ -273,42 +273,50 @@ def write_coreas_hdf5_file(reas_filename, output_filename, f_h5=None, atm_file=N
     read_reas_file(f_h5, reas_filename)
 
     if args.store_input_file_in_hdf5:
-        # print error message in case CorsikaParameterFile was not specified in the .reas file
-        inp_filename = f_h5['CoREAS'].attrs['CorsikaParameterFile']
-        if len(inp_filename) == 0:
-            sys.exit("CorsikaParameterFile was not specified in the .reas file, aborting!")
-        finp = open(os.path.join(os.path.dirname(reas_filename), inp_filename), "r")
+        try:
+            # print error message in case CorsikaParameterFile was not specified in the .reas file
+            inp_filename = f_h5['CoREAS'].attrs['CorsikaParameterFile']
+            if len(inp_filename) == 0:
+                sys.exit("CorsikaParameterFile was not specified in the .reas file, aborting!")
+            finp = open(os.path.join(os.path.dirname(reas_filename), inp_filename), "r")
 
-        # read cards from .inp file and stores them into "inputs" group in f_h5 file
-        read_input_file(f_h5, finp)
+            # read cards from .inp file and stores them into "inputs" group in f_h5 file
+            read_input_file(f_h5, finp)
 
-        if "ATMFILE" in f_h5['inputs'].attrs:
-            print("Found following path for ATMFILE: %s" %
-                f_h5['inputs'].attrs["ATMFILE"])
-            atm_file_full_path = f_h5['inputs'].attrs["ATMFILE"]
-            atm_file_name = os.path.basename(atm_file_full_path)
+            if "ATMFILE" in f_h5['inputs'].attrs:
+                print("Found following path for ATMFILE: %s" %
+                    f_h5['inputs'].attrs["ATMFILE"])
+                atm_file_full_path = f_h5['inputs'].attrs["ATMFILE"]
+                atm_file_name = os.path.basename(atm_file_full_path)
 
-            if atm_file is not None:
-                print("Use user specified ATMFILE: %s" % atm_file)
-                read_atm_file(f_h5, atm_file)
-            elif os.path.exists(atm_file_full_path):
-                print("Read ATMFILE from: %s" % atm_file_full_path)
-                read_atm_file(f_h5, atm_file_full_path)
-            elif os.path.exists(atm_file_name):
-                print("Read ATMFILE from: %s" % atm_file_name)
-                read_atm_file(f_h5, atm_file_name)
-            elif ignore_atm_file:
-                print("Do not read any ATMFILE")
-                pass
-            else:
-                sys.exit("Could not find the atm file in %s or %s. Full stop!" %
-                        (atm_file_full_path, atm_file_name))
+                if atm_file is not None:
+                    print("Use user specified ATMFILE: %s" % atm_file)
+                    read_atm_file(f_h5, atm_file)
+                elif os.path.exists(atm_file_full_path):
+                    print("Read ATMFILE from: %s" % atm_file_full_path)
+                    read_atm_file(f_h5, atm_file_full_path)
+                elif os.path.exists(atm_file_name):
+                    print("Read ATMFILE from: %s" % atm_file_name)
+                    read_atm_file(f_h5, atm_file_name)
+                elif ignore_atm_file:
+                    print("Do not read any ATMFILE")
+                    pass
+                else:
+                    raise FileNotFoundError("Could not find the atm file in %s or %s. Full stop!" %
+                            (atm_file_full_path, atm_file_name))
+        except Exception as e:
+            print("WARNING: Could not read input file. Exception: %s" % e)
+            print("You can avoid this message by running the script with the `--not_store_input_file` option")
 
     if args.store_long_file_in_hdf5:
-        # read in long file
-        long_filename = "DAT" + os.path.splitext(os.path.basename(reas_filename))[0][-6:] + ".long"
-        longinp = io.open(os.path.join(os.path.dirname(reas_filename), long_filename), "r", encoding="UTF-8")
-        read_longitudinal_profile(f_h5, longinp)
+        try:
+            # read in long file
+            long_filename = "DAT" + os.path.splitext(os.path.basename(reas_filename))[0][-6:] + ".long"
+            longinp = io.open(os.path.join(os.path.dirname(reas_filename), long_filename), "r", encoding="UTF-8")
+            read_longitudinal_profile(f_h5, longinp)
+        except Exception as e:
+            print("WARNING: Could not read longitudinal profile. Exception: %s" % e)
+            print("You can avoid this message by running the script with the `--not_store_long_file` option")
 
     # read in antenna data
     listfile = open(os.path.splitext(reas_filename)[0] + ".list", "r")
@@ -318,11 +326,18 @@ def write_coreas_hdf5_file(reas_filename, output_filename, f_h5=None, atm_file=N
         antennalist = np.array([item for item in antennalist if not item.startswith("#")])  # skip comments
 
     antenna_folder = os.path.join(os.path.dirname(reas_filename), "SIM%s_coreas" % number)
-    read_antenna_data(f_h5['CoREAS'], antennalist, antenna_folder,antenna_name_prefix='raw_ch')
+    if os.path.exists(antenna_folder):
+        read_antenna_data(f_h5['CoREAS'], antennalist, antenna_folder)
+    else:
+        print("No antenna data found in %s. Skipping this part" % antenna_folder)
 
-    if args.add_faerie_simulation:
-        antenna_folder2 = os.path.join(os.path.dirname(reas_filename), "SIM%s_geant" % number)
-        read_antenna_data(f_h5['CoREAS'], antennalist, antenna_folder2, hdf5_group_name="observers_geant",antenna_name_prefix='Antenna')
+
+    antenna_folder_geant = os.path.join(os.path.dirname(reas_filename), "SIM%s_geant" % number)
+    if os.path.exists(antenna_folder_geant):
+        read_antenna_data(f_h5['CoREAS'], antennalist, antenna_folder_geant, hdf5_group_name="observers_geant"
+                          ,antenna_name_prefix='Antenna',)
+    else:
+        print("No antenna data found in %s. Skipping this part" % antenna_folder)
 
     return f_h5
 
@@ -798,14 +813,14 @@ if __name__ == '__main__':
                         ' If not provided check for file and location specified in *inp file.')
 
     parser.add_argument("--not_store_input_file", action="store_false",
-                        dest="store_input_file_in_hdf5", help="")
+                        dest="store_input_file_in_hdf5", help="If set, the input file will not be read and stored in the hdf5 file.")
 
     parser.add_argument("--not_store_long_file", action="store_false",
                         dest="store_long_file_in_hdf5", help="")
 
-    parser.add_argument("--add_faerie_simulation", action="store_true",
-                        help="If True, add the electric fields generated by FAERIE (GEANT) to the hdf5 file. "
-                        "The electriec fields are expected to be in the same format and units as CoREAS and in the folder `SIM??????_geant`")
+    # parser.add_argument("--add_faerie_simulation", action="store_true",
+    #                     help="If True, add the electric fields generated by FAERIE (GEANT) to the hdf5 file. "
+    #                     "The electriec fields are expected to be in the same format and units as CoREAS and in the folder `SIM??????_geant`")
 
     args = parser.parse_args()
 
